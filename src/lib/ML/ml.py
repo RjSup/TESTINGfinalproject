@@ -1,5 +1,6 @@
 import sys
 import json
+from scraper import company_by_industry
 
 def process_investment_data(data):
     try:
@@ -22,13 +23,15 @@ def process_investment_data(data):
         else:
             portfolio = {"stocks": 40, "bonds": 40, "cash": 20}
             risk_level = "Low"
+
+        industry_match = company_by_industry(industry)
         
         return {
             "success": True,
             "risk_score": round(risk_score, 2),
             "risk_level": risk_level,
             "portfolio": portfolio,
-            "industry": industry
+            "industry_match": industry_match
         }
     except Exception as e:
         return {

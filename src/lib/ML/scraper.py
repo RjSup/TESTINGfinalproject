@@ -7,8 +7,7 @@ def get_ftse250():
     url="https://en.wikipedia.org/wiki/FTSE_250_Index#Constituents"
 
     try:
-        # fetching website
-        print("Fetching data from LSE website")
+        # fetch data from website
         response =  requests.get(url)
 
         # parsing htlm
@@ -22,34 +21,43 @@ def get_ftse250():
             # select third table
             t = table[2]
         
-        # take stock data
-        stocks = []
+            # take stock data
+            stocks = []
 
-        # skip header row
-        for row in t.find_all('tr')[1:]:
-            cols = row.find_all('td')
-            if len(cols) > 1:
-                company = cols[0].text.strip()
-                ticker = cols[1].text.strip() + '.L'
-                industry = cols[2].text.strip()
+            # skip header row
+            for row in t.find_all('tr')[1:]:
+                cols = row.find_all('td')
+                if len(cols) > 1:
+                    company = cols[0].text.strip()
+                    ticker = cols[1].text.strip() + '.L'
+                    industry = cols[2].text.strip()
 
-                stocks.append({
-                    'Company': company,
-                    'Ticker': ticker,
-                    'Industry': industry
-                })
-        
-        stocks.sort(key=lambda x: x['Industry'])
+                    stocks.append({
+                        'Company': company,
+                        'Ticker': ticker,
+                        'Industry': industry
+                    })
+            
+            stocks.sort(key=lambda x: x['Industry'])
 
-        # create a dataframe and save it to csv
-        df = pd.DataFrame(stocks)
-        df.to_csv('FTSE250.csv', index=False)
-
-        return df
-    
+            # create a dataframe and save it to csv
+            df = pd.DataFrame(stocks)
+            df.to_csv('FTSE250.csv', index=False)
+            return stocks
+        return None
     except requests.RequestException as e:
         print(f"Error fetching: {str(e)}")
         return None
+    
+def company_by_industry(industry):
+    stocks = get_ftse250()
+    if stocks:
+        matching_companies = [
+            stock for stock in stocks
+            if industry.lower() in stock['Industry'].lower()
+        ]
+        return matching_companies
+    return []
 
 if __name__ == "__main__":
     print("Getting data from FTSE 250")
@@ -59,3 +67,5 @@ if __name__ == "__main__":
         print("Fail")
     else:
         print("Data scraped sucessfully")
+
+    matches = company_by_industry()

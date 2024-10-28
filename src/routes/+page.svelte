@@ -169,6 +169,29 @@
                     </div>
                 </div>
             </div>
+            <!-- to be removed only checkingif its working -->
+            <div class="border-t pt-6">
+                <h2 class="text-xl font-medium text-gray-900 mb-4">Companies matching your search{result.industry}</h2>
+                {#if result.industry_match.length > 0}
+                    <div class="space-y-4">
+                        {#each result.industry_match as company}
+                            <div class="p-4 border rounded-lg hover:shadow-md transition-shadow">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="font-medium text-gray-900">{company.Company}</h3>
+                                        <p class="text-sm text-gray-500">{company.Industry}</p>
+                                    </div>
+                                    <span class="px-3 py-1 bg-gray-100 rounded-full text-sm font-medium">
+                                        {company.Ticker}
+                                    </span>
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+                {:else}
+                    <p class="text-gray-500">No companies found in this industry.</p>
+                {/if}
+            </div>
         {/if}
     </div>
 </div>
