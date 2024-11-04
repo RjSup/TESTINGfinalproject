@@ -51,13 +51,25 @@ def get_ftse250():
     
 def company_by_industry(industry):
     stocks = get_ftse250()
-    if stocks:
-        matching_companies = [
-            stock for stock in stocks
-            if industry.lower() in stock['Industry'].lower()
-        ]
-        return matching_companies
-    return []
+    if not stocks:
+        return []
+        
+    industry = industry.lower()
+    keywords = {
+        'technology': ['tech', 'software', 'digital', 'computer', 'it'],
+        'financial': ['bank', 'insurance', 'invest', 'finance'],
+        'healthcare': ['health', 'medical', 'pharma', 'biotech'],
+    }
+    
+    search_terms = keywords.get(industry, [industry])
+    
+    matching_companies = [
+        stock for stock in stocks
+        if any(term in stock['Industry'].lower() or term in stock['Company'].lower() 
+              for term in search_terms)
+    ]
+    
+    return matching_companies
 
 if __name__ == "__main__":
     print("Getting data from FTSE 250")

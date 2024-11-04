@@ -1,4 +1,10 @@
 <script>
+    import ProgressBar from '$lib/components/ProgressBar.svelte';
+    import QuestionForm from '$lib/components/QuestionForm.svelte';
+    import InvestmentSummary from '$lib/components/InvestmentSummary.svelte';
+    import PortfolioDetails from '$lib/components/PortfolioDetails.svelte';
+    import NavBar from '$lib/components/NavBar.svelte';
+
     let investmentAmount = '';
     let currentSavings = '';
     let riskTolerance = 5;
@@ -56,77 +62,27 @@
     }
 </script>
 
+<NavBar />
+
 <div class="min-h-screen w-full bg-white px-4 py-12">
     <div class="max-w-xl mx-auto">
         <h1 class="text-3xl font-bold text-gray-900 mb-8">WealthWise</h1>
         
-        <!-- Progress indicator -->
-        <div class="mb-8">
-            <div class="h-1 bg-gray-100 rounded-full">
-                <div class="h-1 bg-blue-500 rounded-full transition-all duration-300" 
-                     style="width: {((questionIndex + 1) / questions.length) * 100}%">
-                </div>
-            </div>
-            <p class="mt-2 text-sm text-gray-500 text-right">Step {questionIndex + 1} of {questions.length}</p>
-        </div>
+        <ProgressBar 
+            currentStep={questionIndex} 
+            totalSteps={questions.length} 
+        />
 
         {#if questionIndex < questions.length}
-            <div class="space-y-6">
-                <h2 class="text-xl font-medium text-gray-700">
-                    {questions[questionIndex].label}
-                </h2>
-
-                {#if questions[questionIndex].type === 'number'}
-                    {#if questions[questionIndex].bindVar === 'investmentAmount'}
-                        <input 
-                            type="number"
-                            bind:value={investmentAmount}
-                            class="w-full p-3 text-lg text-gray-700 border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                            placeholder={questions[questionIndex].placeholder}
-                        />
-                    {:else}
-                        <input 
-                            type="number"
-                            bind:value={currentSavings}
-                            class="w-full p-3 text-lg text-gray-700 border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                            placeholder={questions[questionIndex].placeholder}
-                        />
-                    {/if}
-                {/if}
-
-                {#if questions[questionIndex].type === 'range'}
-                    <div>
-                        <p class="text-lg mb-3">Risk Level: {riskTolerance}</p>
-                        <input 
-                            type="range"
-                            bind:value={riskTolerance}
-                            min={questions[questionIndex].min}
-                            max={questions[questionIndex].max}
-                            class="w-full h-2 bg-gray-100 rounded-full appearance-none cursor-pointer"
-                        />
-                        <div class="flex justify-between mt-2 text-sm text-gray-500">
-                            <span>Conservative</span>
-                            <span>Aggressive</span>
-                        </div>
-                    </div>
-                {/if}
-
-                {#if questions[questionIndex].type === 'text'}
-                    <input 
-                        type="text"
-                        bind:value={industryPreference}
-                        class="w-full p-3 text-lg text-gray-700 border border-gray-200 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                        placeholder={questions[questionIndex].placeholder}
-                    />
-                {/if}
-
-                <button 
-                    on:click={handleNext}
-                    class="w-full p-4 text-lg font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:ring-4 focus:ring-blue-100 transition-colors"
-                >
-                    {questionIndex < questions.length - 1 ? 'Continue' : 'Calculate Risk'}
-                </button>
-            </div>
+            <QuestionForm
+                question={questions[questionIndex]}
+                bind:investmentAmount
+                bind:currentSavings
+                bind:riskTolerance
+                bind:industryPreference
+                onNext={handleNext}
+                isLastQuestion={questionIndex === questions.length - 1}
+            />
         {/if}
 
         {#if error}
@@ -136,62 +92,11 @@
         {/if}
 
         {#if result}
-            <div class="mt-8 space-y-6">
-                <div class="border-t pt-6">
-                    <h2 class="text-xl font-medium text-gray-900 mb-4">Your Risk Profile</h2>
-                    <div class="space-y-3">
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600">Risk Score</span>
-                            <span class="font-medium">{result.risk_score}</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600">Risk Level</span>
-                            <span class="font-medium">{result.risk_level}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="border-t pt-6">
-                    <h2 class="text-xl font-medium text-gray-900 mb-4">Recommended Portfolio</h2>
-                    <div class="space-y-3">
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600">Stocks</span>
-                            <span class="font-medium">{result.portfolio.stocks}%</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600">Bonds</span>
-                            <span class="font-medium">{result.portfolio.bonds}%</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600">Cash</span>
-                            <span class="font-medium">{result.portfolio.cash}%</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- to be removed only checkingif its working -->
-            <div class="border-t pt-6">
-                <h2 class="text-xl font-medium text-gray-900 mb-4">Companies matching your search{result.industry}</h2>
-                {#if result.industry_match.length > 0}
-                    <div class="space-y-4">
-                        {#each result.industry_match as company}
-                            <div class="p-4 border rounded-lg hover:shadow-md transition-shadow">
-                                <div class="flex justify-between items-start">
-                                    <div>
-                                        <h3 class="font-medium text-gray-900">{company.Company}</h3>
-                                        <p class="text-sm text-gray-500">{company.Industry}</p>
-                                    </div>
-                                    <span class="px-3 py-1 bg-gray-100 rounded-full text-sm font-medium">
-                                        {company.Ticker}
-                                    </span>
-                                </div>
-                            </div>
-                        {/each}
-                    </div>
-                {:else}
-                    <p class="text-gray-500">No companies found in this industry.</p>
-                {/if}
-            </div>
+            <InvestmentSummary summary={result.summary} />
+            <PortfolioDetails 
+                portfolio={result.portfolio}
+                rebalanceDate={result.summary.rebalance_date}
+            />
         {/if}
     </div>
 </div>
