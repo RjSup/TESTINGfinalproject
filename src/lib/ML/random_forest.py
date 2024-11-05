@@ -1,5 +1,8 @@
 import random
 import math
+from collections import Counter
+from joblib import Parallel, delayed
+from sklearn.base import BaseEstimator
 
 class DecisionTree:
     def __init__(self, max_depth=10):
@@ -93,25 +96,26 @@ class DecisionTree:
             return self._predict_one(x, node.left)
         return self._predict_one(x, node.right)
 
-class RandomForest:
-    def __init__(self, n_trees=100, max_depth=10):
+class RandomForest(BaseEstimator):
+    def __init__(self, n_trees=100, max_depth=10, n_jobs=-1):
         self.n_trees = n_trees
         self.max_depth = max_depth
+        self.n_jobs = n_jobs  # Number of parallel jobs
         self.trees = []
-        
+
     def fit(self, X, y):
         n_features = len(X[0])
         self.features_per_tree = int(math.sqrt(n_features))
         
-        for _ in range(self.n_trees):
+        def train_tree():
             tree = DecisionTree(max_depth=self.max_depth)
             X_sample, y_sample = self._bootstrap_sample(X, y)
             feature_indices = random.sample(range(n_features), self.features_per_tree)
-            
             X_subset = [[row[i] for i in feature_indices] for row in X_sample]
-            
             tree.fit(X_subset, y_sample)
-            self.trees.append((tree, feature_indices))
+            return tree, feature_indices
+
+        self.trees = Parallel(n_jobs=self.n_jobs)(delayed(train_tree)() for _ in range(self.n_trees))
 
     def _bootstrap_sample(self, X, y):
         n_samples = len(X)
@@ -128,3 +132,14 @@ class RandomForest:
         return [sum(pred[i] for pred in predictions) / len(self.trees)
                 for i in range(len(X))]
 
+    def score(self, X, y):
+        predictions = self.predict(X)
+        return sum(1 for p, t in zip(predictions, y) if p == t) / len(y)
+
+    def get_params(self, deep=True):
+        return {"n_trees": self.n_trees, "max_depth": self.max_depth, "n_jobs": self.n_jobs}
+
+    def set_params(self, **params):
+        for key, value in params.items():
+            setattr(self, key, value)
+        return self

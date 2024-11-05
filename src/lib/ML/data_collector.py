@@ -23,9 +23,9 @@ class FTSEDataCollector:
     def _add_features(self, df):
         try:
             # Returns
-            df['return_1m'] = df['Close'].pct_change().fillna(0)
-            df['return_3m'] = df['Close'].pct_change(periods=3).fillna(0)
-            df['return_6m'] = df['Close'].pct_change(periods=6).fillna(0)
+            df['return_1m'] = df['Close'].pct_change(fill_method=None).fillna(0)
+            df['return_3m'] = df['Close'].pct_change(periods=3, fill_method=None).fillna(0)
+            df['return_6m'] = df['Close'].pct_change(periods=6, fill_method=None).fillna(0)
             
             # Moving averages
             df['SMA3'] = df['Close'].rolling(window=3).mean().bfill()
@@ -51,7 +51,12 @@ class FTSEDataCollector:
             df['volatility'] = df['return_1m'].rolling(window=12).std().fillna(0)
             df['volume_ratio'] = (df['Volume'] / df['Volume'].rolling(window=3).mean()).fillna(1)
             
+            # Additional features
+            df['momentum'] = df['Close'] - df['Close'].shift(4)
+            df['stochastic_k'] = 100 * (df['Close'] - df['Low'].rolling(window=14).min()) / (df['High'].rolling(window=14).max() - df['Low'].rolling(window=14).min())
+            df['stochastic_d'] = df['stochastic_k'].rolling(window=3).mean()
+            
             return df.fillna(0)
-
-        except Exception:
+        except Exception as e:
+            print(f"Error adding features: {e}")
             return None
