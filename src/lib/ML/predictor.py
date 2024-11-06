@@ -1,56 +1,139 @@
 import os
+
 import pickle
-from config import Config
+
 from data_collector import FTSEDataCollector
 
+from config import Config
+
+
+
 class StockPredictor:
+
     def __init__(self):
+
         self.data_collector = FTSEDataCollector()
-        self.model = self.load_latest_model()
+
+        self.model_data = self.load_latest_model()
+
+        
 
     def load_latest_model(self):
+
         try:
-            current_dir = os.getcwd()
-            ml_dir = os.path.join(current_dir, 'src', 'lib', 'ML')
+
+            # Get the absolute path to the ML directory
+
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+
+            ml_dir = os.path.join(current_dir, '..', 'lib', 'ML')
+
+            model_path = os.path.join(ml_dir, 'trained_model_20241106.pkl')
+
             
-            model_files = []
-            if os.path.exists(ml_dir):
-                model_files.extend([f for f in os.listdir(ml_dir) if f.startswith('trained_model_')])
-            model_files.extend([f for f in os.listdir(current_dir) if f.startswith('trained_model_')])
 
-            if not model_files:
-                return None
+            print(f"Looking for model at: {model_path}")
 
-            latest_model = max(model_files)
-            model_path = os.path.join(ml_dir, latest_model) if latest_model in os.listdir(ml_dir) else latest_model
+            
 
-            with open(model_path, 'rb') as f:
-                return pickle.load(f)
+            if os.path.exists(model_path):
 
-        except Exception:
+                print(f"Found model at: {model_path}")
+
+                with open(model_path, 'rb') as f:
+
+                    return pickle.load(f)
+
+            else:
+
+                # Try alternative path
+
+                alternative_path = os.path.join(current_dir, 'trained_model_20241106.pkl')
+
+                print(f"Trying alternative path: {alternative_path}")
+
+                
+
+                if os.path.exists(alternative_path):
+
+                    print(f"Found model at: {alternative_path}")
+
+                    with open(alternative_path, 'rb') as f:
+
+                        return pickle.load(f)
+
+                else:
+
+                    print("Model file not found in either location")
+
+                    print(f"Current directory: {current_dir}")
+
+                    print(f"Directory contents: {os.listdir(current_dir)}")
+
+                    return None
+
+                
+
+        except Exception as e:
+
+            print(f"Error loading model: {e}")
+
+            print(f"Current working directory: {os.getcwd()}")
+
+            print(f"Directory contents: {os.listdir()}")
+
             return None
 
+
+
     def predict_stock(self, ticker):
+
         try:
-            if self.model is None:
+
+            if self.model_data is None:
+
+                print("Model data not available")
+
                 return None
+
+                
 
             data = self.data_collector.get_stock_data(ticker)
+
             if data is None or data.empty:
+
                 return None
 
-            if not all(feature in data.columns for feature in Config.FEATURES):
-                return None
+                
 
-            latest_features = [float(data[col].iloc[-1]) for col in Config.FEATURES]
-            predicted_return = self.model.predict([latest_features])[0]
+            latest_features = [data[col].iloc[-1] for col in Config.FEATURES]
+
+            scaled_features = self.model_data['scaler'].transform([latest_features])
+
+            predicted_return = self.model_data['model'].predict(scaled_features)[0]
+
+            
+
             current_price = float(data['Close'].iloc[-1])
 
+            predicted_price = current_price * (1 + predicted_return)
+
+            
+
             return {
+
                 'current_price': current_price,
+
                 'predicted_return': predicted_return,
-                'predicted_price': current_price * (1 + predicted_return)
+
+                'predicted_price': predicted_price
+
             }
 
-        except Exception:
+            
+
+        except Exception as e:
+
+            print(f"Error making prediction: {e}")
+
             return None

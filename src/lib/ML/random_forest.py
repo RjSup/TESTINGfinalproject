@@ -1,145 +1,134 @@
-import random
-import math
-from collections import Counter
-from joblib import Parallel, delayed
-from sklearn.base import BaseEstimator
+import numpy as np
 
 class DecisionTree:
-    def __init__(self, max_depth=10):
+    def __init__(self, max_depth=5):
         self.max_depth = max_depth
         self.root = None
-
+    
     class Node:
         def __init__(self):
-            self.feature_index = None
+            self.feature = None
             self.threshold = None
             self.left = None
             self.right = None
             self.value = None
-
+    
     def fit(self, X, y):
+        # Basic data validation for stock data
+        valid_mask = ~np.isnan(y) & ~np.isinf(y)
+        X = X[valid_mask]
+        y = y[valid_mask]
+        
         self.root = self._build_tree(X, y)
-
-    def _calculate_variance(self, y):
-        if not y:
-            return 0
-        mean = sum(y) / len(y)
-        return sum((val - mean) ** 2 for val in y) / len(y)
-
-    def _find_best_split(self, X, y):
-        best_gain = float('-inf')
-        best_feature = None
-        best_threshold = None
-        
-        current_variance = self._calculate_variance(y)
-        
-        for feature in range(len(X[0])):
-            values = sorted(set(row[feature] for row in X))
-            
-            for i in range(len(values) - 1):
-                threshold = (values[i] + values[i + 1]) / 2
-                
-                left_y = [y[j] for j in range(len(X)) if X[j][feature] <= threshold]
-                right_y = [y[j] for j in range(len(X)) if X[j][feature] > threshold]
-                
-                if not left_y or not right_y:
-                    continue
-                
-                gain = current_variance - (
-                    (len(left_y) * self._calculate_variance(left_y) +
-                     len(right_y) * self._calculate_variance(right_y)) / len(y)
-                )
-                
-                if gain > best_gain:
-                    best_gain = gain
-                    best_feature = feature
-                    best_threshold = threshold
-        
-        return best_feature, best_threshold
-
+    
     def _build_tree(self, X, y, depth=0):
         node = self.Node()
         
-        if depth >= self.max_depth or len(set(y)) == 1:
-            node.value = sum(y) / len(y)
+        # Leaf conditions
+        if depth >= self.max_depth or len(y) < 2:
+            node.value = np.mean(y)
             return node
         
-        feature_index, threshold = self._find_best_split(X, y)
-        if feature_index is None:
-            node.value = sum(y) / len(y)
+        # Randomly select features to consider (random forest characteristic)
+        n_features = X.shape[1]
+        feature_subset = np.random.choice(n_features, max(1, n_features//3), replace=False)
+        
+        best_var_reduction = 0
+        best_feature = None
+        best_threshold = None
+        
+        current_variance = np.var(y)
+        
+        # Find best split
+        for feature in feature_subset:
+            # Use percentiles for thresholds
+            thresholds = np.percentile(X[:, feature], [25, 50, 75])
+            
+            for threshold in thresholds:
+                left_mask = X[:, feature] <= threshold
+                right_mask = ~left_mask
+                
+                # Need minimum samples in each split
+                if np.sum(left_mask) < 2 or np.sum(right_mask) < 2:
+                    continue
+                
+                left_variance = np.var(y[left_mask])
+                right_variance = np.var(y[right_mask])
+                
+                # Calculate variance reduction
+                n_left = np.sum(left_mask)
+                n_right = np.sum(right_mask)
+                var_reduction = current_variance - (
+                    (n_left * left_variance + n_right * right_variance) / len(y)
+                )
+                
+                if var_reduction > best_var_reduction:
+                    best_var_reduction = var_reduction
+                    best_feature = feature
+                    best_threshold = threshold
+        
+        # If no good split found, make leaf
+        if best_feature is None:
+            node.value = np.mean(y)
             return node
         
-        node.feature_index = feature_index
-        node.threshold = threshold
+        # Split the node
+        node.feature = best_feature
+        node.threshold = best_threshold
         
-        left_indices = [i for i in range(len(X)) if X[i][feature_index] <= threshold]
-        right_indices = [i for i in range(len(X)) if X[i][feature_index] > threshold]
+        left_mask = X[:, best_feature] <= best_threshold
+        right_mask = ~left_mask
         
-        left_X = [X[i] for i in left_indices]
-        left_y = [y[i] for i in left_indices]
-        right_X = [X[i] for i in right_indices]
-        right_y = [y[i] for i in right_indices]
-        
-        node.left = self._build_tree(left_X, left_y, depth + 1)
-        node.right = self._build_tree(right_X, right_y, depth + 1)
+        node.left = self._build_tree(X[left_mask], y[left_mask], depth + 1)
+        node.right = self._build_tree(X[right_mask], y[right_mask], depth + 1)
         
         return node
-
+    
     def predict(self, X):
-        return [self._predict_one(x, self.root) for x in X]
-
-    def _predict_one(self, x, node):
+        return np.array([self._predict_single(x, self.root) for x in X])
+    
+    def _predict_single(self, x, node):
         if node.value is not None:
             return node.value
         
-        if x[node.feature_index] <= node.threshold:
-            return self._predict_one(x, node.left)
-        return self._predict_one(x, node.right)
-
-class RandomForest(BaseEstimator):
-    def __init__(self, n_trees=100, max_depth=10, n_jobs=-1):
+        if x[node.feature] <= node.threshold:
+            return self._predict_single(x, node.left)
+        return self._predict_single(x, node.right)
+    
+class RandomForest:
+    def __init__(self, n_trees=10, max_depth=5):
         self.n_trees = n_trees
         self.max_depth = max_depth
-        self.n_jobs = n_jobs  # Number of parallel jobs
         self.trees = []
-
+    
     def fit(self, X, y):
-        n_features = len(X[0])
-        self.features_per_tree = int(math.sqrt(n_features))
+        # Convert inputs to numpy arrays
+        X = np.asarray(X)
+        y = np.asarray(y)
         
-        def train_tree():
+        # Remove invalid values
+        valid_mask = ~np.isnan(y) & ~np.isinf(y)
+        valid_mask &= ~np.any(np.isnan(X), axis=1)
+        valid_mask &= ~np.any(np.isinf(X), axis=1)
+        
+        X = X[valid_mask]
+        y = y[valid_mask]
+        
+        # Train trees with bootstrapped samples
+        for _ in range(self.n_trees):
+            # Bootstrap sampling
+            indices = np.random.choice(len(X), len(X), replace=True)
+            sample_X = X[indices]
+            sample_y = y[indices]
+            
+            # Create and train tree
             tree = DecisionTree(max_depth=self.max_depth)
-            X_sample, y_sample = self._bootstrap_sample(X, y)
-            feature_indices = random.sample(range(n_features), self.features_per_tree)
-            X_subset = [[row[i] for i in feature_indices] for row in X_sample]
-            tree.fit(X_subset, y_sample)
-            return tree, feature_indices
-
-        self.trees = Parallel(n_jobs=self.n_jobs)(delayed(train_tree)() for _ in range(self.n_trees))
-
-    def _bootstrap_sample(self, X, y):
-        n_samples = len(X)
-        indices = [random.randint(0, n_samples-1) for _ in range(n_samples)]
-        return [X[i] for i in indices], [y[i] for i in indices]
-
+            tree.fit(sample_X, sample_y)
+            self.trees.append(tree)
+    
     def predict(self, X):
-        predictions = []
-        for tree, features in self.trees:
-            X_subset = [[row[i] for i in features] for row in X]
-            prediction = tree.predict(X_subset)
-            predictions.append(prediction)
+        # Get predictions from all trees
+        predictions = np.array([tree.predict(X) for tree in self.trees])
         
-        return [sum(pred[i] for pred in predictions) / len(self.trees)
-                for i in range(len(X))]
-
-    def score(self, X, y):
-        predictions = self.predict(X)
-        return sum(1 for p, t in zip(predictions, y) if p == t) / len(y)
-
-    def get_params(self, deep=True):
-        return {"n_trees": self.n_trees, "max_depth": self.max_depth, "n_jobs": self.n_jobs}
-
-    def set_params(self, **params):
-        for key, value in params.items():
-            setattr(self, key, value)
-        return self
+        # Average predictions
+        return np.mean(predictions, axis=0)

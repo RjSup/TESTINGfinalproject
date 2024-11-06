@@ -1,62 +1,60 @@
 import yfinance as yf
 import pandas as pd
-from datetime import datetime, timedelta
+import numpy as np
 
 class FTSEDataCollector:
+    def __init__(self):
+        pass
+        
     def get_stock_data(self, ticker):
         try:
-            ticker = ticker.strip()
             if not ticker.endswith('.L'):
                 ticker = f"{ticker}.L"
-
+                
             stock = yf.Ticker(ticker)
-            df = stock.history(period="2y", interval="1mo")
+            df = stock.history(period="5y", interval="1wk")
             
             if df.empty:
                 return None
-
+                
             return self._add_features(df)
-
-        except Exception:
+            
+        except Exception as e:
+            print(f"Error collecting data for {ticker}: {e}")
             return None
-
+            
     def _add_features(self, df):
         try:
-            # Returns
-            df['return_1m'] = df['Close'].pct_change(fill_method=None).fillna(0)
-            df['return_3m'] = df['Close'].pct_change(periods=3, fill_method=None).fillna(0)
-            df['return_6m'] = df['Close'].pct_change(periods=6, fill_method=None).fillna(0)
+            close = df['Close'].values
             
-            # Moving averages
-            df['SMA3'] = df['Close'].rolling(window=3).mean().bfill()
-            df['SMA6'] = df['Close'].rolling(window=6).mean().bfill()
-            df['sma3_cross'] = (df['Close'] > df['SMA3']).astype(float)
-            df['sma6_cross'] = (df['Close'] > df['SMA6']).astype(float)
+            # Basic returns
+            for period in [1, 4, 12]:
+                df[f'return_{period}w'] = df['Close'].pct_change(period)
+            # Simple moving average crossover
+            sma20 = pd.Series(close).rolling(window=3).mean()
+            df['sma_cross'] = (close > sma20).astype(float)
             
-            # RSI
-            delta = df['Close'].diff()
-            gain = delta.where(delta > 0, 0).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-            rs = gain / (loss + 1e-9)
+            # Basic RSI
+            delta = np.diff(close, prepend=close[0])
+            gain = np.where(delta > 0, delta, 0)
+            loss = np.where(delta < 0, -delta, 0)
+            avg_gain = pd.Series(gain).rolling(window=14).mean()
+            avg_loss = pd.Series(loss).rolling(window=14).mean()
+            rs = avg_gain / (avg_loss + 1e-9)
             df['rsi'] = 100 - (100 / (1 + rs))
             
-            # MACD
-            exp1 = df['Close'].ewm(span=12).mean()
-            exp2 = df['Close'].ewm(span=26).mean()
-            df['MACD'] = exp1 - exp2
-            df['Signal'] = df['MACD'].ewm(span=9).mean()
-            df['macd_signal'] = (df['MACD'] > df['Signal']).astype(float)
+            # Simple MACD
+            exp12 = pd.Series(close).ewm(span=12).mean()
+            exp26 = pd.Series(close).ewm(span=26).mean()
+            macd = exp12 - exp26
+            signal = macd.rolling(window=9).mean()
+            df['macd_signal'] = (macd > signal).astype(float)
             
-            # Volatility and volume
-            df['volatility'] = df['return_1m'].rolling(window=12).std().fillna(0)
-            df['volume_ratio'] = (df['Volume'] / df['Volume'].rolling(window=3).mean()).fillna(1)
-            
-            # Additional features
-            df['momentum'] = df['Close'] - df['Close'].shift(4)
-            df['stochastic_k'] = 100 * (df['Close'] - df['Low'].rolling(window=14).min()) / (df['High'].rolling(window=14).max() - df['Low'].rolling(window=14).min())
-            df['stochastic_d'] = df['stochastic_k'].rolling(window=3).mean()
+            # Basic volatility
+            df['volatility'] = pd.Series(df['return_1w']).rolling(window=12).std()
             
             return df.fillna(0)
+            
         except Exception as e:
             print(f"Error adding features: {e}")
             return None

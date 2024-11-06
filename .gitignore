@@ -41,3 +41,5 @@ debug.log
 # System and IDE-specific
 .DS_Store
 Thumbs.db
+
+src/lib/ML/stock_cache/

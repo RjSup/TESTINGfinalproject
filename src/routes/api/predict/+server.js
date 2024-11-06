@@ -1,50 +1,73 @@
 import { json } from '@sveltejs/kit';
 import { spawn } from 'child_process';
+import path from 'path';
 
 export async function POST({ request }) {
-    console.log('API endpoint hit');
-
     try {
-        // Get the data from the request
         const data = await request.json();
-        console.log('Received data:', data);
+        console.log('API endpoint hit with data:', JSON.stringify(data, null, 2));
 
-        // Run the Python process and store its output
+        // Validate input data
+        if (!data.investment_amount || !data.risk_tolerance) {
+            console.log('Validation failed: Missing required fields');
+            return json({
+                success: false,
+                error: "Missing required fields"
+            }, { status: 400 });
+        }
+
+        const scriptPath = path.join(process.cwd(), 'src', 'lib', 'ML', 'main.py');
+        console.log('Executing Python script at:', scriptPath);
+
         return new Promise((resolve) => {
-            const pythonProcess = spawn('python3', ['src/lib/ML/ml.py']);
+            const pythonProcess = spawn('python.exe', [scriptPath]);
             let outputData = '';
+            let errorData = '';
 
-            // Collect the output from Python
+            pythonProcess.stdin.write(JSON.stringify(data));
+            pythonProcess.stdin.end();
+
             pythonProcess.stdout.on('data', (data) => {
                 outputData += data.toString();
-                console.log('Python output:', data.toString());
             });
 
-            // Collect errors from Python output
             pythonProcess.stderr.on('data', (data) => {
+                errorData += data.toString();
                 console.error('Python stderr:', data.toString());
             });
 
-            // After Python code is done running
             pythonProcess.on('close', (code) => {
                 console.log('Python process closed with code:', code);
-                
-                // Parse the Python output as JSON
+                console.log('Raw output:', outputData);
+
+                if (code !== 0) {
+                    console.error('Python script error:', errorData);
+                    return resolve(json({
+                        success: false,
+                        error: "Error executing Python script"
+                    }, { status: 500 }));
+                }
+
                 try {
-                    const result = JSON.parse(outputData.trim());
+                    const jsonStartIndex = outputData.indexOf('{');
+                    const jsonString = outputData.substring(jsonStartIndex);
+                    const result = JSON.parse(jsonString);
                     resolve(json(result));
-                } catch (error) {
-                    console.error('Parse error:', error);
-                    resolve(json({ success: false, error: 'Failed to parse Python output' }));
+                } catch (e) {
+                    console.error('JSON parse error:', e);
+                    console.error('Raw output:', outputData);
+                    resolve(json({
+                        success: false,
+                        error: "Error parsing prediction results"
+                    }, { status: 500 }));
                 }
             });
-
-            // Send user input to Python script
-            pythonProcess.stdin.write(JSON.stringify(data));
-            pythonProcess.stdin.end();
         });
     } catch (error) {
-        console.error('Server error:', error);
-        return json({ success: false, error: error.message });
+        console.error('API error:', error);
+        return json({
+            success: false,
+            error: "Internal server error"
+        }, { status: 500 });
     }
 }

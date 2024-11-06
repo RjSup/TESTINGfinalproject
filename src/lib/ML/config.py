@@ -1,8 +1,12 @@
 class Config:
     FEATURES = [
-        'return_1m', 'return_3m', 'return_6m',
-        'sma3_cross', 'sma6_cross', 'rsi',
-        'macd_signal', 'volatility', 'volume_ratio'
+        'return_1w',
+        'return_4w',
+        'return_12w',
+        'sma_cross',
+        'rsi',
+        'macd_signal',
+        'volatility'
     ]
     RISK_LEVELS = {
         'HIGH': {'stocks': 4},
